@@ -30,13 +30,23 @@ class JatsParserPlugin extends GenericPlugin {
 	function register($category, $path, $mainContextId = null) {
 		if (parent::register($category, $path, $mainContextId)) {
 
+			$application = Application::get();
+			$applicationName = $application->getName();
+
 			if ($this->getEnabled()) {
 				// Add data to the publication
 				HookRegistry::register('Template::Workflow::Publication', array($this, 'publicationTemplateData'));
 				HookRegistry::register('Schema::get::publication', array($this, 'addToSchema'));
 				HookRegistry::register('LoadHandler', array($this, 'loadFullTextAssocHandler'));
 				HookRegistry::register('Publication::edit', array($this, 'editPublicationFullText'));
-				HookRegistry::register('Templates::Article::Main', array($this, 'displayFullText'));
+				switch ($applicationName) {
+					case 'ojs':
+						HookRegistry::register('Templates::Article::Main', array($this, 'displayFullText'));
+						break;
+					case 'ops':
+						HookRegistry::register('Templates::Preprint::Main', array($this, 'displayFullText'));
+						break;
+				}
 				HookRegistry::register('TemplateManager::display', array($this, 'themeSpecificStyles'));
 				HookRegistry::register('Form::config::before', array($this, 'addCitationsFormFields'));
 				HookRegistry::register('Publication::edit', array($this, 'editPublicationReferences'));
@@ -121,8 +131,18 @@ class JatsParserPlugin extends GenericPlugin {
 		// HTML preparation
 		$context = $request->getContext(); /* @var $context Journal */
 		$submission = Services::get('submission')->get($publication->getData('submissionId')); /* @var $submission Submission */
-		$issueDao = DAORegistry::getDAO('IssueDAO');
-		$issue = $issueDao->getById($publication->getData('issueId'), $context->getId());
+		
+		$application = Application::get();
+		$applicationName = $application->getName();
+
+		if ($applicationName == "ops") {
+			// there are no issues in OPS
+			$issue = "";
+		} else {
+			$issueDao = DAORegistry::getDAO('IssueDAO');
+			$issue = $issueDao->getById($publication->getData('issueId'), $context->getId());
+		}
+
 
 		//$this->imageUrlReplacement($xmlGalley, $xpath);
 		//$this->ojsCitationsExtraction($article, $templateMgr, $htmlDocument, $request);
@@ -325,6 +345,8 @@ class JatsParserPlugin extends GenericPlugin {
 		 * @var $submissionFileDao SubmissionFileDAO
 		 * @var $submissionFile SubmissionFile
 		 */
+
+
 		$templateMgr = $args[1];
 		$request = $this->getRequest();
 		$context = $request->getContext();
@@ -338,11 +360,31 @@ class JatsParserPlugin extends GenericPlugin {
 			return ['key' => $localeKey, 'label' => $localeNames[$localeKey]];
 		}, $supportedSubmissionLocales);
 
+		$application = Application::get();
+		$applicationName = $application->getName();
+
 		import('lib.pkp.classes.submission.SubmissionFile'); // const
-		$submissionFiles = Services::get('submissionFile')->getMany([
-			'submissionIds' => [$submission->getId()],
-			'fileStages' => [SUBMISSION_FILE_PRODUCTION_READY],
-		]);
+
+		switch ($applicationName) {
+			case 'ojs':
+				$submissionFiles = Services::get('submissionFile')->getMany([
+					'submissionIds' => [$submission->getId()],
+					'fileStages' => [SUBMISSION_FILE_PRODUCTION_READY], 
+				]);
+				break;
+			case 'ops':
+				// need the publicationId to get the galley objects
+				$galleys = Services::get('galley')->getMany(['publicationIds' => $latestPublication->getId()]);
+				// now get the galley files
+				foreach ($galleys as $galley) {
+					// This is an galley object
+					$submissionFiles[] = $galley->getFile();
+				}
+				break;
+		}
+
+
+		
 
 		$submissionFilesXML = array();
 		foreach ($submissionFiles as $submissionFile) {

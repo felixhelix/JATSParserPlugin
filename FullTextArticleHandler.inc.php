@@ -1,8 +1,8 @@
 <?php
 
-import('pages.article.ArticleHandler');
+import('pages.preprint.PreprintHandler');
 
-class FullTextArticleHandler extends ArticleHandler {
+class FullTextArticleHandler extends PreprintHandler {
 
 	var $_plugin;
 
@@ -22,9 +22,9 @@ class FullTextArticleHandler extends ArticleHandler {
 	function downloadFullTextAssoc($args, $request) {
 		$fileId = $args[2];
 		$dispatcher = $request->getDispatcher(); /** @var $dispatcher Dispatcher */
-		if (empty($fileId) || !$this->article || !$this->publication) $dispatcher->handle404();
+		if (empty($fileId) || !$this->preprint || !$this->publication) $dispatcher->handle404();
 
-		if (!$this->userCanViewGalley($request, $this->article->getId())) {
+		if (!$this->userCanViewGalley($request, $this->preprint->getId())) {
 			header('HTTP/1.0 403 Forbidden');
 			echo '403 Forbidden<br>';
 			exit;
@@ -38,7 +38,7 @@ class FullTextArticleHandler extends ArticleHandler {
 		$dependentFilesIterator = Services::get('submissionFile')->getMany([
 			'assocTypes' => [ASSOC_TYPE_SUBMISSION_FILE],
 			'assocIds' => array_values($fullTextFileIds),
-			'submissionIds' => [$this->article->getId()],
+			'submissionIds' => [$this->preprint->getId()],
 			'fileStages' => [SUBMISSION_FILE_DEPENDENT],
 			'includeDependentFiles' => true,
 		]);
